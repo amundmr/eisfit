@@ -2,9 +2,11 @@ use std::fs::File;
 use std::path::Path;
 use std::io::{BufReader, BufRead};
 
+use plotters::prelude::*;
+
 fn main() {
     let (freq, real, imag) = read_file("./dat/20201202-KS-KS326-PEIS-10mV-1MHz-100mHz-20ptsprdec-charged_symmetric_inert_ref_LMO-VSP_C03.mpt");
-    println!("{:?}", freq);
+    plot(freq, real, imag);
 }
 
 fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
@@ -44,7 +46,7 @@ fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
             break;
         }
     }
-    println!("# Headerlines: {}", &n_head);
+    //println!("# Headerlines: {}", &n_head);
 
     // Iterate over lines in order to add to vectors
     for line in data2.lines().skip(n_head as usize) {
@@ -73,4 +75,20 @@ fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     
     
 
+}
+
+fn plot(freq: Vec<f64>, real: Vec<f64>, imag: Vec<f64>) {
+    println!("plotfunc");
+    let drawing_area = BitMapBackend::new("images/2.0.png", (1024, 768))
+        .into_drawing_area();
+
+    drawing_area.fill(&WHITE).unwrap();
+
+    let mut chart = ChartBuilder::on(&drawing_area)
+        .build_cartesian_2d(0..100, 0..100)
+        .unwrap();
+
+    chart.draw_series(
+        LineSeries::new((1..100).map(|x| (x, 100-x)), &BLACK),
+    ).unwrap();
 }
