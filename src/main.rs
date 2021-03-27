@@ -7,6 +7,7 @@ use plotters::prelude::*;
 fn main() {
     let (freq, real, imag) = read_file("./dat/20201202-KS-KS326-PEIS-10mV-1MHz-100mHz-20ptsprdec-charged_symmetric_inert_ref_LMO-VSP_C03.mpt");
     plot(freq, real, imag);
+
 }
 
 fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
@@ -79,16 +80,34 @@ fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
 
 fn plot(freq: Vec<f64>, real: Vec<f64>, imag: Vec<f64>) {
     println!("plotfunc");
-    let drawing_area = BitMapBackend::new("images/2.0.png", (1024, 768))
+    let drawing_area = BitMapBackend::new("test.png", (1024, 768))
         .into_drawing_area();
 
     drawing_area.fill(&WHITE).unwrap();
 
     let mut chart = ChartBuilder::on(&drawing_area)
-        .build_cartesian_2d(0..100, 0..100)
+        .caption("Electrochemical Impedance Spectroscopy", ("Arial", 30))
+        .margin(10)
+        // enables Y axis, the size is 40 px
+        .set_label_area_size(LabelAreaPosition::Left, 40)
+        // enable X axis, the size is 40 px
+        .set_label_area_size(LabelAreaPosition::Bottom, 40)
+        .build_cartesian_2d(-20..100, -20..100)
         .unwrap();
 
+    chart
+        .configure_mesh()
+        .disable_x_mesh()
+        .disable_y_mesh()
+        .x_labels(30)
+        .y_desc("Real")
+        .draw().unwrap();
+
+
     chart.draw_series(
-        LineSeries::new((1..100).map(|x| (x, 100-x)), &BLACK),
+        LineSeries::new((-10..=10).map(|x| (x, x* x)), &GREEN)
+      ).unwrap();
+    chart.draw_series(
+        LineSeries::new(imag.iter().map(|x| (x,x)), &GREEN)
     ).unwrap();
 }
