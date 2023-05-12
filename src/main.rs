@@ -1,113 +1,53 @@
+mod ecm;
+use std::error::Error;
 use std::fs::File;
-use std::path::Path;
-use std::io::{BufReader, BufRead};
+use std::io::prelude::*;
 
-use plotters::prelude::*;
 
-fn main() {
-    let (freq, real, imag) = read_file("./dat/20201202-KS-KS326-PEIS-10mV-1MHz-100mHz-20ptsprdec-charged_symmetric_inert_ref_LMO-VSP_C03.mpt");
-    plot(freq, real, imag);
+fn main() -> Result<(), Box<dyn Error>> {
+    let ri = 0.1;
+    let rp = 0.2;
+    let c = 1e-6;  // 1 uF
+    
+    let start_freq = 1000.0;
+    let end_freq = 0.01;
+    let num_points = 30;
+    let freqs = logspace(start_freq, end_freq, num_points);
 
+    // Accumulate impedance data
+    let mut freq_data = Vec::with_capacity(num_points);
+    let mut real_data = Vec::with_capacity(num_points);
+    let mut imag_data = Vec::with_capacity(num_points);
+
+    for freq in freqs {
+        let z = ecm::ecm_impedance(freq, ri, rp, c);
+        freq_data.push(freq);
+        real_data.push(z.re);
+        imag_data.push(z.im);
+
+        println!("ECM impedance at {:.2} Hz: {:.4} + j{:.4} ohms",
+                 freq, z.re, z.im);
+    }
+
+    // Save impedance data to CSV file
+    let mut file = File::create("ecm_impedance.csv")?;
+    file.write_all(b"f,Z_re,Z_im\n")?;
+    for i in 0..num_points {
+        file.write_fmt(format_args!("{:.2},{:.4},{:.4}\n",
+            freq_data[i], real_data[i], imag_data[i]))?;
+    }
+
+    Ok(())
 }
 
-fn read_file(filename: &str) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
-
-    let f = File::open(filename); //Could have added an .unwrap() to this, but handling it manually with match gives more learning!
-    let f = match f {
-        Ok(file) => file,
-        Err(error) => panic!("Cannot open file: {:?}", error),
-    };
-    let f1 = File::open(filename); //Could have added an .unwrap() to this, but handling it manually with match gives more learning!
-    let f1 = match f1 {
-        Ok(file) => file,
-        Err(error) => panic!("Cannot open file: {:?}", error),
-    };
-    let data = BufReader::new(f);
-    let data2 = BufReader::new(f1);
-
-
-    //Initialize vectors
-    let mut freq: Vec<f64> = vec![];
-    let mut real: Vec<f64> = vec![];
-    let mut imag: Vec<f64> = vec![];
-
-    let mut n_head = 1u8;
-
-    // First iterate in order to find number of header elements to skip
-    for line  in data.lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(_) => String::new(),
-        };
-
-        if line.contains("Nb header lines :") {
-            let n_headerlines: Vec<&str> = line.split(":").collect();
-            let n_headerlines = n_headerlines.last().unwrap();
-            n_head = n_headerlines.trim().parse::<u8>().unwrap();
-            break;
-        }
+fn logspace(start: f64, end: f64, num_points: usize) -> Vec<f64> {
+    let log_start = start.log10();
+    let log_end = end.log10();
+    let step = (log_end - log_start) / (num_points - 1) as f64;
+    let mut freqs = Vec::with_capacity(num_points);
+    for i in 0..num_points {
+        let log_freq = log_start + i as f64 * step;
+        freqs.push(10.0f64.powf(log_freq));
     }
-    //println!("# Headerlines: {}", &n_head);
-
-    // Iterate over lines in order to add to vectors
-    for line in data2.lines().skip(n_head as usize) {
-        let line = match line {
-            Ok(line) => line,
-            Err(error) => {
-                println!("Can't read line in file: {:?}", error);
-                String::new()
-            }
-        };
-        //println!("{:?}", &line);
-        let linevec: Vec<&str> = line.split("\t").collect();
-
-        let cur_freq = linevec[0].trim().replace(",", ".").parse::<f64>().unwrap();
-        freq.push(cur_freq);
-
-        let cur_real = linevec[1].trim().replace(",", ".").parse::<f64>().unwrap();
-        freq.push(cur_real);
-
-        let cur_imag = linevec[2].trim().replace(",", ".").parse::<f64>().unwrap();
-        freq.push(cur_imag);
-    }
-    //println!("{:?}", freq);
-
-    (freq, imag, real)
-    
-    
-
-}
-
-fn plot(freq: Vec<f64>, real: Vec<f64>, imag: Vec<f64>) {
-    println!("plotfunc");
-    let drawing_area = BitMapBackend::new("test.png", (1024, 768))
-        .into_drawing_area();
-
-    drawing_area.fill(&WHITE).unwrap();
-
-    let mut chart = ChartBuilder::on(&drawing_area)
-        .caption("Electrochemical Impedance Spectroscopy", ("Arial", 30))
-        .margin(10)
-        // enables Y axis, the size is 40 px
-        .set_label_area_size(LabelAreaPosition::Left, 40)
-        // enable X axis, the size is 40 px
-        .set_label_area_size(LabelAreaPosition::Bottom, 40)
-        .build_cartesian_2d(-20..100, -20..100)
-        .unwrap();
-
-    chart
-        .configure_mesh()
-        .disable_x_mesh()
-        .disable_y_mesh()
-        .x_labels(30)
-        .y_desc("Real")
-        .draw().unwrap();
-
-
-    chart.draw_series(
-        LineSeries::new((-10..=10).map(|x| (x, x* x)), &GREEN)
-      ).unwrap();
-    chart.draw_series(
-        LineSeries::new(imag.iter().map(|x| (x,x)), &GREEN)
-    ).unwrap();
+    freqs
 }
